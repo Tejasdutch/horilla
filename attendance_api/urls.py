@@ -45,4 +45,7 @@ urlpatterns = [
     path("offline-employees/list/", OfflineEmployeesListView.as_view(), name=""),
     path("permission-check/attendance", AttendancePermissionCheck.as_view()),
     path("checking-in", CheckingStatus.as_view()),
+    path("offline-employee-mail-send", OfflineEmployeeMailsend.as_view()),
+    path("converted-mail-template", ConvertedMailTemplateConvert.as_view()),
+    path("mail-templates", MailTemplateView.as_view()),
 ]
