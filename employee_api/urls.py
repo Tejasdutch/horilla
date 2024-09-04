@@ -6,7 +6,7 @@ from employee_api import permission_views
 from . import views
 
 urlpatterns = [
-    path("employees/", views.EmployeeAPIView.as_view(), name="employees"),
+    path("employees/", views.EmployeeAPIView.as_view(), name="employees-list"),
     path(
         "employees/<int:pk>/", views.EmployeeAPIView.as_view(), name="employee-detail"
     ),
@@ -14,7 +14,11 @@ urlpatterns = [
         "employee-type/<int:pk>", views.EmployeeTypeAPIView.as_view(), name="employees"
     ),
     path("employee-type/", views.EmployeeTypeAPIView.as_view(), name="employees"),
-    path("list/employees/", views.EmployeeListAPIView.as_view(), name="employee-list"),
+    path(
+        "list/employees/",
+        views.EmployeeListAPIView.as_view(),
+        name="employee-list-detailed",
+    ),  # Alternative endpoint for listing employees
     path(
         "employee-bank-details/",
         views.EmployeeBankDetailsAPIView.as_view(),
@@ -87,7 +91,7 @@ urlpatterns = [
         "documents/<int:pk>/", views.DocumentAPIView.as_view(), name="document-detail"
     ),
     path(
-        "employee-bulk-archive/<str:is_active>/",
+        "employee-bulk- archive/<str:is_active>/",
         views.EmployeeBulkArchiveView.as_view(),
         name="employee-bulk-archive",
     ),

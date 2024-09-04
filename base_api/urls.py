@@ -159,7 +159,7 @@ urlpatterns = [
         name="shift-request-export",
     ),
     path(
-        "shift-request-allocation",
+        "shift-request-allocation/<int:id>",
         views.ShiftRequestAllocationView.as_view(),
         name="shift-request-allocation",
     ),

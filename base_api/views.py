@@ -1097,7 +1097,7 @@ class ShiftRequestExportView(APIView):
 class ShiftRequestAllocationView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
+    def post(self, request, id):
         shift_request = ShiftRequest.objects.get(id=id)
         if not shift_request.is_any_request_exists():
             shift_request.reallocate_approved = True
