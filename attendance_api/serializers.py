@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from attendance.models import *
+from recruitment.models import RecruitmentMailTemplate
 
 
 class AttendanceSerializer(serializers.ModelSerializer):
@@ -202,4 +203,10 @@ class AttendanceActivitySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AttendanceActivity
+        fields = "__all__"
+
+
+class MailTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RecruitmentMailTemplate
         fields = "__all__"
