@@ -1,7 +1,9 @@
 from datetime import date, datetime, timedelta, timezone
 
+from django import template
 from django.conf import settings
 from django.contrib.auth.decorators import permission_required
+from django.core.mail import EmailMessage
 from django.db.models import Case, CharField, F, Value, When
 from django.http import QueryDict
 from django.shortcuts import get_object_or_404
@@ -19,10 +21,12 @@ from attendance.views.dashboard import (
     find_on_time,
 )
 from attendance.views.views import *
-from base.methods import is_reportingmanager
+from base.backends import ConfiguredEmailBackend
+from base.methods import generate_pdf, is_reportingmanager
 from base_api.decorators import manager_permission_required
 from base_api.methods import groupby_queryset, permission_based_queryset
 from employee.filters import EmployeeFilter
+from recruitment.models import RecruitmentMailTemplate
 
 from .serializers import (
     AttendanceActivitySerializer,
@@ -30,6 +34,7 @@ from .serializers import (
     AttendanceOverTimeSerializer,
     AttendanceRequestSerializer,
     AttendanceSerializer,
+    MailTemplateSerializer,
 )
 
 # Create your views here.
@@ -605,15 +610,19 @@ class OfflineEmployeesListView(APIView):
                 ),
                 default=Value("Expected working"),  # Default status
                 output_field=CharField(),
-            )
+            ),
+            job_position_id=F("employee_work_info__job_position_id"),
         ).values(
             "employee_first_name",
             "employee_last_name",
             "leave_status",
             "employee_profile",
+            "id",
+            "job_position_id",
         )
 
         for employee in employees_with_leave_status:
+
             if employee["employee_profile"]:
                 employee["employee_profile"] = (
                     settings.MEDIA_URL + employee["employee_profile"]
@@ -667,3 +676,88 @@ class CheckingStatus(APIView):
             {"status": status, "duration": duration, "clock_in_time": clock_in_time},
             status=200,
         )
+
+
+class MailTemplateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        instances = RecruitmentMailTemplate.objects.all()
+        serializer = MailTemplateSerializer(instances, many=True)
+        return Response(serializer.data, status=200)
+
+
+class ConvertedMailTemplateConvert(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request):
+        template_id = request.data.get("template_id", None)
+        employee_id = request.data.get("employee_id", None)
+        employee = Employee.objects.filter(id=employee_id).first()
+        bdy = RecruitmentMailTemplate.objects.filter(id=template_id).first()
+        template_bdy = template.Template(bdy.body)
+        context = template.Context(
+            {"instance": employee, "self": request.user.employee_get}
+        )
+        render_bdy = template_bdy.render(context)
+        return Response(render_bdy)
+
+
+class OfflineEmployeeMailsend(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        employee_id = request.POST.get("employee_id")
+        subject = request.POST.get("subject", "")
+        bdy = request.POST.get("body", "")
+        other_attachments = request.FILES.getlist("other_attachments")
+        attachments = [
+            (file.name, file.read(), file.content_type) for file in other_attachments
+        ]
+        email_backend = ConfiguredEmailBackend()
+        host = email_backend.dynamic_username
+        employee = Employee.objects.get(id=employee_id)
+        template_attachment_ids = request.POST.getlist("template_attachments")
+        bodys = list(
+            RecruitmentMailTemplate.objects.filter(
+                id__in=template_attachment_ids
+            ).values_list("body", flat=True)
+        )
+        for html in bodys:
+            # due to not having solid template we first need to pass the context
+            template_bdy = template.Template(html)
+            context = template.Context(
+                {"instance": employee, "self": request.user.employee_get}
+            )
+            render_bdy = template_bdy.render(context)
+            attachments.append(
+                (
+                    "Document",
+                    generate_pdf(render_bdy, {}, path=False, title="Document").content,
+                    "application/pdf",
+                )
+            )
+
+        template_bdy = template.Template(bdy)
+        context = template.Context(
+            {"instance": employee, "self": request.user.employee_get}
+        )
+        render_bdy = template_bdy.render(context)
+
+        email = EmailMessage(
+            subject,
+            render_bdy,
+            host,
+            [employee.employee_work_info.email],
+        )
+        email.content_subtype = "html"
+
+        email.attachments = attachments
+        try:
+            email.send()
+            if employee.employee_work_info.email:
+                return Response(f"Mail sent to {employee.get_full_name()}")
+            else:
+                return Response(f"Email not set for {employee.get_full_name()}")
+        except Exception as e:
+            return Response("Something went wrong")
